@@ -3,6 +3,7 @@ Local Portfile Repository for Jojojol based on [Funalab Ports](https://github.co
 
 ## What is here
 * python/py-optuna  ... Portfile for [optuna](https://pypi.org/project/optuna/) v2.10.0
+* python/py-cmaes  ... Portfile for [cmaes](https://pypi.org/project/cmaes/) v0.8.2
 
 ## How to use
 ### Use this project as your Local Portfile Repository
