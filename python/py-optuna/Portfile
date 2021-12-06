@@ -28,6 +28,7 @@ if {${name} ne ${subport}} {
                         port:py${python.version}-numpy \
                         port:py${python.version}-scipy \
                         port:py${python.version}-packaging \
+                        port:py${python.version}-plotly \
                         port:py${python.version}-tqdm
                         
     
