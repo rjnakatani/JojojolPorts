@@ -29,7 +29,7 @@ file:///Users/yourname/git/JojojolPorts
 % port search optuna
 ```
 
-### Install py-chainer (1.24.0) by MacPorts
+### Install py-optuna (2.10.0) by MacPorts
 ```sh
 % sudo port install py38-optuna
 ```
