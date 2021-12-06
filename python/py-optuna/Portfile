@@ -1,0 +1,36 @@
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        optuna optuna v2.10.0
+distname            ${github.version}
+
+name                py-optuna
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         A hyperparameter optimization framework.
+long_description    Optuna is an automatic hyperparameter optimization software framework, particularly designed for machine learning. It features an imperative, define-by-run style user API. Thanks to our define-by-run API, the code written with Optuna enjoys high modularity, and the user of Optuna can dynamically construct the search spaces for the hyperparameters.
+homepage            https://github.com/optuna/optuna
+
+checksums           rmd160  8cb812bccdfd0d9e14b8414eed1ac7d258768c59 \
+                    sha256  fdbf9cf29ec9cff54881da2bbe4609a7706b5073802b5d9485699d21f26d335c \
+                    size    513001
+
+python.versions     36 37 38
+
+if {${name} ne ${subport}} {
+    depends_lib-append  port:py${python.version}-colorlog \
+                        port:py${python.version}-alembic \
+                        port:py${python.version}-cliff \
+                        port:py${python.version}-cmaes \
+                        port:py${python.version}-sqlalchemy \
+                        port:py${python.version}-numpy \
+                        port:py${python.version}-scipy \
+                        port:py${python.version}-packaging \
+                        port:py${python.version}-tqdm
+                        
+    
+    livecheck.type      none
+
+}

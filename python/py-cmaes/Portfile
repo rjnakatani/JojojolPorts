@@ -1,0 +1,37 @@
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        CyberAgentAILab cmaes v0.8.2
+github.tarball_from archive
+distname            ${github.version}
+
+name                py-cmaes
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         Lightweight Covariance Matrix Adaptation Evolution Strategy (CMA-ES) implementation.
+long_description    Lightweight Covariance Matrix Adaptation Evolution Strategy (CMA-ES) implementation for Python 3.
+homepage            https://github.com/CyberAgentAILab/cmaes
+
+checksums           rmd160  fb60f873bc4f6600655f1b7e80365467f2993969 \
+                    sha256  8d19eaf1d726d87c1f1f1a96a437e48623879c928bf6a37f643dc423b38c4ac8 \
+                    size    21834
+
+python.versions     36 37 38
+
+if {${name} ne ${subport}} {
+
+    depends_build-append   port:py${python.version}-setuptools \
+                           port:py${python.version}-wheel
+                           
+    depends_lib-append     port:py${python.version}-numpy
+    
+    livecheck.type         none
+
+} else {
+
+    livecheck.regex        archive/[join ${github.tag_prefix} ""](1\[^"\]+)${extract.suffix}
+
+
+}
