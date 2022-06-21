@@ -2,8 +2,9 @@
 Local Portfile Repository for Jojojol based on [Funalab Ports](https://github.com/funasoul/FunalabPorts/).
 
 ## What is here
-* python/py-optuna  ... Portfile for [optuna](https://pypi.org/project/optuna/) v2.10.0
+* python/py-optuna  ... Portfile for [optuna](https://pypi.org/project/optuna/) v2.10.1
 * python/py-cmaes  ... Portfile for [cmaes](https://pypi.org/project/cmaes/) v0.8.2
+* python/py-cliff_dev ... Portfile from [py-cliff](https://github.com/macports/macports-ports/blob/master/python/py-cliff/Portfile) with added py39 variant
 
 ## How to use
 ### Use this project as your Local Portfile Repository
