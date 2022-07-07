@@ -1,0 +1,26 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        hellysmile fake-useragent 0.1.11
+distname            ${github.version}
+
+name                py-fake-useragent
+license             APL-2
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         Up to date simple useragent faker with real world database.
+long_description    Fake user agent is a up to date simple useragent faker with real world database.
+homepage            https://github.com/hellysmile/fake-useragent
+
+checksums           rmd160  9cf73b56f4ea3dfb0b537e6d060f89c5eba4c0fe \
+                    sha256  0b867699cba705726e9b77ce4f25260f292e52b19fe5cdc0115cf558cc58b0fe \
+                    size    20993
+
+python.versions     36 37 38 39
+
+if {${name} ne ${subport}} {
+    livecheck.type      none
+
+}
