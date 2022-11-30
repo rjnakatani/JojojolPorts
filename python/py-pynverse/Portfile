@@ -1,0 +1,29 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        alvarosg pynverse 0.1.4.4
+distname            ${github.version}
+
+name                py-pynverse
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         A module specialized on calculating the numerical inverse of any invertible continuous function.
+long_description    Pynverse provides a main function inversefunc that calculates the numerical inverse of a function f passed as the first argument in the form of a callable.
+homepage            https://github.com/alvarosg/pynverse
+
+checksums           rmd160  3c1a5712f0d7cabf9a9117642faaf2b71a3ea9da \
+                    sha256  02d80d992e5c3309a08dc7a1d7a68f73cb7982b07fe63a1d1677945f86d54eaa \
+                    size    8872
+
+python.versions     36 37 38 39 310
+
+if {${name} ne ${subport}} {
+    depends_lib-append  port:py${python.version}-numpy \
+                        port:py${python.version}-scipy    
+    
+    livecheck.type      none
+
+}
