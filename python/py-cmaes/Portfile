@@ -15,11 +15,11 @@ description         Lightweight Covariance Matrix Adaptation Evolution Strategy 
 long_description    Lightweight Covariance Matrix Adaptation Evolution Strategy (CMA-ES) implementation for Python 3.
 homepage            https://github.com/CyberAgentAILab/cmaes
 
-checksums           rmd160  fb60f873bc4f6600655f1b7e80365467f2993969 \
-                    sha256  8d19eaf1d726d87c1f1f1a96a437e48623879c928bf6a37f643dc423b38c4ac8 \
-                    size    21834
+checksums           rmd160  a0af24deddcdbac163da00613f46edcc307906ee \
+                    sha256  11e33fd55e18a7409014067f791ae14df676cfabb2d67fc32951c817fa852842 \
+                    size    21826
 
-python.versions     36 37 38 39
+python.versions     36 37 38 39 310
 
 if {${name} ne ${subport}} {
 
