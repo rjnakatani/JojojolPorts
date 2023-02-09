@@ -1,0 +1,48 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem             1.0
+PortGroup              github 1.0
+PortGroup              elisp 1.0
+
+
+platforms              darwin
+categories             editors
+license                GPL-3+
+maintainers            openmaintainer
+description            A Neuron HOC mode for emacs and an NMODL mode for emacs
+long_description       A Neuron HOC mode for emacs and an NMODL mode for emacs. Their main features are syntax highlighting and syntax-based indentation. They've been tested under XEmacs 21.4 and Emacs 20.7.1.
+
+github.setup           davidcsterratt neuron-emacs 44c5daf1e7b0a32670ec6dccad5798ee07534736
+version                20151218
+name                   neuron-mode.el
+
+checksums              rmd160  c2a1b5fb0dafb38607d5d21260101efff924fcf4 \
+                       sha256  68b6f1563c43816a8255040ff626bb58041b76837ac0ad85c97be0d7fb269e30 \
+                       size    7634
+
+depends_lib-append     path:${emacs_binary}:${emacs_binary_provider}
+
+use_configure          no
+
+# if the following line is commented out, the build system
+# generates a compiled version markdown-mode.elc
+# the destroot block needs to be updated in that case
+build {}
+
+destroot {
+    xinstall -d ${destroot}${emacs_lispdir}
+    copy        ${workpath}/${worksrcdir}/nrnhoc.el  \
+                ${destroot}${emacs_lispdir}
+    copy        ${workpath}/${worksrcdir}/nmodl.el  \
+                ${destroot}${emacs_lispdir}
+}
+
+notes {
+    To use add the following to your ~/.emacs:
+    
+    (autoload 'nrnhoc-mode "nrnhoc" "Enter NRNHOC mode." t)
+    (setq auto-mode-alist (cons '("\\.hoc\\'" . nrnhoc-mode) auto-mode-alist))
+
+    (autoload 'nmodl-mode "nmodl" "Enter NMODL mode." t)
+    (setq auto-mode-alist (cons '("\\.mod\\'" . nmodl-mode) auto-mode-alist))
+}
