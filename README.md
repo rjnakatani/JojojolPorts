@@ -6,6 +6,12 @@ Local Portfile Repository for Jojojol based on [Funalab Ports](https://github.co
 * python/py-cmaes  ... Portfile for [cmaes](https://pypi.org/project/cmaes/) v0.8.2
 * python/py-cliff_dev ... Portfile from [py-cliff](https://github.com/macports/macports-ports/blob/master/python/py-cliff/Portfile) with added py39 variant
 * python/py-kivy_dev ... Portfile for [kivy](https://github.com/kivy/kivy/) 1.10.1
+* python/py-fake-useragent ... Portfile for [py-fake-user-agent](https://github.com/fake-useragent/fake-useragent) v0.1.11
+* python/py-pynverse ... Portfile for [pynverse](https://github.com/alvarosg/pynverse) v0.1.1.4
+* editors/neuron-mode.el ... Portfile for [neuron-emacs](https://github.com/davidcsterratt/neuron-emacs)
+
+
+
 
 ## How to use
 ### Use this project as your Local Portfile Repository
