@@ -1,0 +1,26 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           cmake 1.1
+
+github.setup        sandialabs omega_h 9.34.13 v
+
+name                Omega_h
+platforms           darwin
+categories          science
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         Omega_h is a C++14 library that implements tetrahedron and triangle mesh adaptativity, with a focus on scalable HPC performance using (optionally) MPI and OpenMP or CUDA.
+long_description    Omega_h is a C++14 library that implements tetrahedron and triangle mesh adaptativity, with a focus on scalable HPC performance using (optionally) MPI and OpenMP or CUDA. It is intended to provided adaptive functionality to existing simulation codes. Mesh adaptivity allows one to minimize both discretization error and number of degrees of freedom live during the simulation, as well as enabling moving object and evolving geometry simulations. Omega_h will do this for you in a way that is fast, memory-efficient, and portable across many different architectures.
+homepage            https://github.com/sandialabs/omega_h
+
+
+checksums           rmd160  1e14aa30a6994af10cebee1560f12943c190f2ca \
+                    sha256  ec170cfcfab71e924729b65f57573b20fd997bea62e4df82bc69d863701b413b \
+                    size    1679806
+
+configure.args-append  -DOmega_h_USE_MPI:BOOL=ON \
+                       -DCMAKE_CXX_COMPILER:FILEPATH=${prefix}/bin/mpicxx \
+                       -DOmega_h_USE_Gmsh_DEFAULT:BOOL=ON \
+                       -DOmega_h_USE_Gmsh:BOOL=ON \
+                       -DCMAKE_CXX_FLAGS=-O3
+

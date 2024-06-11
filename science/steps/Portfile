@@ -1,0 +1,95 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           cmake 1.1
+
+github.setup        CNS-OIST STEPS 5.0.1
+fetch.type          git
+worksrcdir          ${github.project}-${github.version}
+git.url             https://github.com/${github.author}/${github.project}.git
+git.branch          ${github.version}
+
+
+name                STEPS
+license             GLP-3
+platforms           darwin
+categories          science
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         STEPS is a package for exact stochastic simulation of reaction-diffusion systems in arbitrarily complex 3D geometries. 
+long_description    STEPS is a package for exact stochastic simulation of reaction-diffusion systems in arbitrarily complex 3D geometries. Our core simulation algorithm is an implementation of Gillespie's SSA, extended to deal with diffusion of molecules over the elements of a 3D tetrahedral mesh.
+homepage            https://steps.sourceforge.net/STEPS/
+
+
+checksums           rmd160  60f52c25f4478cc1b94974316e29a4c8fd05f7e9 \
+                    sha256  7983572c498cd5ea63487757b3da187c6f89464ee27d388afd1339b104f92676 \
+                    size    41193395
+
+
+depends_build-append port:cmake
+depends_lib-append port:OpenBLAS port:gsl port:eigen3 port:metis port:sundials6 port:omega_h
+
+
+configure.args-append -DSTEPS_USE_STEPSBLENDER=False \
+                      -DCMAKE_C_COMPILER=${prefix}/bin/mpicc \
+                      -DCMAKE_CXX_COMPILER=${prefix}/bin/mpicxx \
+                      -DSTEPS_INSTALL_PYTHON_DEPS=False 
+
+variant python39 conflicts python310 description {setup python 39 module} {
+    set python_branch 3.9
+    set python_version          [string map {. ""} $python_branch]
+    set python_bin ${prefix}/bin/python${python_branch}
+    set python_prefix  ${frameworks_dir}/Python.framework/Versions/${python_branch}
+    set python_pkgd ${python_prefix}/lib/python${python_branch}/site-packages
+
+    depends_build-append   port:py${python_version}-setuptools \
+        port:py${python_version}-wheel \
+        port:py${python_version}-build \
+        port:py${python_version}-pip-tools 
+
+    
+    depends_lib-append     port:py${python_version}-numpy \
+        port:py${python_version}-cython \
+        
+    configure.args-append -DPython_EXECUTABLE:FILEPATH=${python_bin} \
+        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd}
+}
+variant python310 conflicts python39 description {setup python 310 module} {
+    set python_branch 3.10
+    set python_version          [string map {. ""} $python_branch]
+    set python_bin ${prefix}/bin/python${python_branch}
+    set python_prefix  ${frameworks_dir}/Python.framework/Versions/${python_branch}
+    set python_pkgd ${python_prefix}/lib/python${python_branch}/site-packages
+
+    depends_build-append   port:py${python_version}-setuptools \
+        port:py${python_version}-wheel \
+        port:py${python_version}-build \
+        port:py${python_version}-pip-tools 
+
+    
+    depends_lib-append     port:py${python_version}-numpy \
+        port:py${python_version}-cython \
+        
+    configure.args-append -DPython_EXECUTABLE:FILEPATH=${python_bin} \
+        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd}
+}
+
+variant blender description {STEPS blender package} {
+    configure.args-replace -DSTEPS_USE_STEPSBLENDER=False -DSTEPS_USE_STEPSBLENDER=True
+}
+universal_variant no
+
+default_variants +blender +python39
+
+post-extract {
+    system -W ${worksrcpath} "git submodule update --init --recursive"
+}
+
+
+livecheck.type         none
+use_parallel_build  no
+
+test.run             yes
+test.target          check
+
+destroot.target install
+
