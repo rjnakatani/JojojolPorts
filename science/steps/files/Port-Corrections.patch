@@ -1,0 +1,792 @@
+diff --git a/.bbp-project.yaml b/.bbp-project.yaml
+index 7fed01b..137badc 100644
+--- a/.bbp-project.yaml
++++ b/.bbp-project.yaml
+@@ -2,12 +2,12 @@ tools:
+   ClangFormat:
+     include:
+       match: &cpp_patterns
+-      - .*src/steps/.*\.((h)|(cpp)|(hpp))
+-      - .*test/unit/.*\.((h)|(cpp)|(hpp))
++      - .*src/steps/.*\.((h)|(cpp)|(hpp))$
++      - .*test/unit/.*\.((h)|(cpp)|(hpp))$
+   CMakeFormat:
+     enable: True
+   ClangTidy:
+     option: --fix
+     include:
+       match:
+-      - .*src/steps/.*\.cpp
++      - .*src/steps/.*\.cpp$
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 43f547d..a841781 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -408,15 +408,25 @@ endif()
+ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+   # Default python installation to site-packages, do not use Python_SITEARCH since it points to
+   # dist-packages
+-  execute_process(
+-    COMMAND
+-      ${Python_EXECUTABLE} -c
+-      "import sys,sysconfig; print(sysconfig.get_path('platlib', sysconfig.get_preferred_scheme('prefix' if sys.prefix != sys.base_prefix else 'user')))"
+-    OUTPUT_VARIABLE _python_site_packages_dir
+-    OUTPUT_STRIP_TRAILING_WHITESPACE)
+-  set(Python_INSTALL_PREFIX
+-      ${_python_site_packages_dir}
+-      CACHE PATH "Path to install steps Python package")
++  if(NOT DEFINED Python_INSTALL_PREFIX)
++    execute_process(
++      COMMAND
++        ${Python_EXECUTABLE} -c
++        "import os,sys,sysconfig; print(sysconfig.get_path('platlib') if (sys.prefix != sys.base_prefix or os.path.exists(os.path.join(sys.prefix, 'conda-meta'))) else sysconfig.get_path('platlib', 'osx_framework_user' if bool(sysconfig.get_config_var('PYTHONFRAMEWORK')) else f'{os.name}_user'))"
++      OUTPUT_VARIABLE _python_site_packages_dir
++      ERROR_VARIABLE _python_site_packages_error
++      OUTPUT_STRIP_TRAILING_WHITESPACE)
++    if(EXISTS ${_python_site_packages_dir})
++      set(Python_INSTALL_PREFIX
++          ${_python_site_packages_dir}
++          CACHE PATH "Path to install steps Python package")
++    else()
++      message(
++        FATAL_ERROR
++          "Could not determine the python install directory. Please provide it with the -DPython_INSTALL_PREFIX=/path/to/dir option.\n"
++          "The following error was encountered: ${_python_site_packages_error}")
++    endif()
++  endif()
+ 
+   set(CMAKE_INSTALL_PREFIX
+       "~/.local/"
+diff --git a/pysteps/CMakeLists.txt b/pysteps/CMakeLists.txt
+index c800be7..1d34091 100644
+--- a/pysteps/CMakeLists.txt
++++ b/pysteps/CMakeLists.txt
+@@ -118,6 +118,9 @@ set_directory_properties(
+ 
+ # Python optional packages and extras
+ set(STEPS_INCLUDE_PACKAGES "steps" "steps.*")
++if(USE_MPI)
++  list(APPEND py_deps "mpi")
++endif()
+ if(STEPS_USE_DIST_MESH)
+   list(APPEND py_deps "dist")
+ endif()
+@@ -147,8 +150,6 @@ add_custom_command(
+   OUTPUT ${steps_package_timestamp}
+   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+   COMMAND ${Python_EXECUTABLE} -m build --wheel --outdir ${CMAKE_BINARY_DIR}
+-  COMMAND ${Python_EXECUTABLE} -m pip install -t ${localpkgs} --upgrade --no-deps --find-links
+-          ${CMAKE_BINARY_DIR} --no-index steps[${py_all_deps}]
+   COMMAND ${CMAKE_COMMAND} -E touch ${steps_package_timestamp})
+ 
+ # Install Python package with pip
+@@ -177,18 +178,11 @@ if(STEPS_INSTALL_PYTHON_DEPS)
+     CODE "execute_process(
+     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+     COMMAND ${Python_EXECUTABLE} -m build --wheel --outdir ${CMAKE_BINARY_DIR})
+-  execute_process(
+-      COMMAND ${Python_EXECUTABLE} -m pip install --requirement ${steps_requirements_file})
+-  execute_process(
+-    COMMAND ${Python_EXECUTABLE} -m pip install -t ${Python_INSTALL_PREFIX} --upgrade --force-reinstall --no-deps --find-links ${CMAKE_BINARY_DIR} --no-index steps[${py_all_deps}])"
+-  )
+ else()
+   install(
+     CODE "execute_process(
+     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+     COMMAND ${Python_EXECUTABLE} -m build --wheel --outdir ${CMAKE_BINARY_DIR})
+-  execute_process(
+-    COMMAND ${Python_EXECUTABLE} -m pip install -t ${Python_INSTALL_PREFIX} --upgrade --force-reinstall --no-deps --find-links ${CMAKE_BINARY_DIR} --no-index steps[${py_all_deps}])"
+   )
+ 
+ endif()
+diff --git a/pysteps/pyproject.toml.in b/pysteps/pyproject.toml.in
+index 1f9d66e..0534765 100644
+--- a/pysteps/pyproject.toml.in
++++ b/pysteps/pyproject.toml.in
+@@ -16,6 +16,7 @@ homepage = "http://steps.sourceforge.net"
+ repository = "https://github.com/CNS-OIST/STEPS"
+ 
+ [project.optional-dependencies]
++mpi = ["mpi4py>=3.1"]
+ dist = ["mpi4py>=3.1"]
+ hdf5 = ["h5py>=3.1"]
+ cov = ["coverage>=5.0"]
+diff --git a/pysteps/setup.cfg.in b/pysteps/setup.cfg.in
+index 059f37f..d9b94dd 100644
+--- a/pysteps/setup.cfg.in
++++ b/pysteps/setup.cfg.in
+@@ -16,6 +16,8 @@ install_requires =
+ include = ${STEPS_INCLUDE_PACKAGES_SETUP}
+ 
+ [options.extras_require]
++mpi =
++    mpi4py>=3.1
+ dist =
+     mpi4py>=3.1
+ hdf5 =
+diff --git a/pysteps/steps/API_2/saving.py b/pysteps/steps/API_2/saving.py
+index 6c6bc9f..ed60bc3 100644
+--- a/pysteps/steps/API_2/saving.py
++++ b/pysteps/steps/API_2/saving.py
+@@ -2130,7 +2130,7 @@ class _HDF5DistribDataHandler(_HDF5DataHandler):
+         for rnk in self._usedRanks:
+             # Open HDF5 files
+             if rnk not in self._dbh._distribRankDBHs:
+-                if rnk == nsim.MPI.rank:
++                if rnk == nsim.MPI._rank:
+                     self._dbh._distribRankDBHs[rnk] = self._dbh
+                 else:
+                     self._dbh._distribRankDBHs[rnk] = HDF5Handler(
+@@ -3534,7 +3534,7 @@ class HDF5Handler(DatabaseHandler, nutils.Versioned):
+         if hasattr(self, '_file') and self._file is not None:
+             self._file.close()
+         for rnk, dbh in self._distribRankDBHs.items():
+-            if rnk != nsim.MPI.rank:
++            if rnk != nsim.MPI._rank:
+                 dbh._close()
+ 
+     def _checkOpenFile(self, sim=None):
+@@ -3554,7 +3554,7 @@ class HDF5Handler(DatabaseHandler, nutils.Versioned):
+                 self._file = h5py.File(self._path, 'r', **self._fileKwArgs)
+             else:
+                 if sim._isDistributed():
+-                    self._path = HDF5Handler._DISTRIBUTED_HDF_SUFFIX.format(self._pathPrefix, nsim.MPI.rank)
++                    self._path = HDF5Handler._DISTRIBUTED_HDF_SUFFIX.format(self._pathPrefix, nsim.MPI._rank)
+                 elif nsim.MPI._shouldWrite:
+                     self._path = self._pathPrefix
+                 else:
+@@ -3667,7 +3667,7 @@ class HDF5Handler(DatabaseHandler, nutils.Versioned):
+                 )
+             else:
+                 raise Exception(
+-                    f'The HDF5 file associated with MPI rank {nsim.MPI.rank} contains '
++                    f'The HDF5 file associated with MPI rank {nsim.MPI._rank} contains '
+                     f'{len(selectorNames)} distributed column remapping dataset while it should '
+                     f'contain {len(rsInd2DistColMap)}.'
+                 )
+@@ -3742,7 +3742,7 @@ class HDF5Handler(DatabaseHandler, nutils.Versioned):
+     def _newGroup(self, sim, uid, selectors, **kwargs):
+         """Initialize the file and add a new run group."""
+         self._shouldWrite = nsim.MPI._shouldWrite or sim._isDistributed()
+-        self._nbSavingRanks = nsim.MPI.nhosts if sim._isDistributed() else 1
++        self._nbSavingRanks = nsim.MPI._nhosts if sim._isDistributed() else 1
+         if self._shouldWrite:
+             self._checkOpenFile(sim)
+ 
+@@ -4067,7 +4067,7 @@ class XDMFHandler(HDF5Handler):
+         savedFp = set(self._savedFilePaths)
+         # To be saved soon:
+         savedFp.add(self._getCurrXDMFFilePath())
+-        if self._sim._isDistributed() and nsim.MPI.rank == 0:
++        if self._sim._isDistributed() and nsim.MPI._rank == 0:
+             savedFp.add(self._getCurrFullXDMFFilePath())
+         return super()._getFilePaths() + sorted(savedFp)
+ 
+@@ -4205,7 +4205,7 @@ class XDMFHandler(HDF5Handler):
+             ngeom.TriReference: [],
+             ngeom.VertReference: [],
+         }
+-        self._rs2Grids = {(nsim.MPI.rank, rs._selectorInd): [] for rs in selectors}
++        self._rs2Grids = {(nsim.MPI._rank, rs._selectorInd): [] for rs in selectors}
+ 
+         locStr2RefCls = {
+             cls._locStr: cls for cls in [ngeom.TetReference, ngeom.TriReference, ngeom.VertReference]
+@@ -4223,7 +4223,7 @@ class XDMFHandler(HDF5Handler):
+             ngeom.Patch._locStr: {},
+         }
+         for rs in selectors:
+-            rsId = (nsim.MPI.rank, rs._selectorInd)
++            rsId = (nsim.MPI._rank, rs._selectorInd)
+             if 'loc_type' in rs.metaData and 'loc_id' in rs.metaData:
+                 types = rs.metaData['loc_type']
+                 inds = rs.metaData['loc_id']
+@@ -4339,7 +4339,7 @@ class XDMFHandler(HDF5Handler):
+             # Write column remapping of result selectors, if needed
+             for rs in selectors:
+                 n = rs._getEvalLen()
+-                colRemap = rsColRemaps.get((nsim.MPI.rank, rs._selectorInd), [])
++                colRemap = rsColRemaps.get((nsim.MPI._rank, rs._selectorInd), [])
+                 if len(colRemap) > 0:
+                     if len(colRemap) < n:
+                         colRemap += sorted(set(range(n)) - set(colRemap))
+@@ -4366,10 +4366,10 @@ class XDMFHandler(HDF5Handler):
+ 
+             self._grid2NonDistrRS = {}
+             for (rnk, rsIdx), gridVals in self._rs2Grids.items():
+-                if rnk != nsim.MPI.rank:
++                if rnk != nsim.MPI._rank:
+                     for val, loctpe, start, step, nVals, gridCls, gridInd, center in gridVals:
+                         assert nVals == 1
+-                        localRemap = allColRemaps[nsim.MPI.rank].get((rnk, rsIdx), None)
++                        localRemap = allColRemaps[nsim.MPI._rank].get((rnk, rsIdx), None)
+                         remoteRemap = allColRemaps[rnk].get((rnk, rsIdx), None)
+                         if localRemap is not None:
+                             start = localRemap[start]
+@@ -4382,7 +4382,7 @@ class XDMFHandler(HDF5Handler):
+ 
+     def _getCurrXDMFFilePath(self):
+         fileName = XDMFHandler._FILE_NAME_PATTERN.format(
+-            uid=self._currUID, run=self._currRun, rank=nsim.MPI.rank
++            uid=self._currUID, run=self._currRun, rank=nsim.MPI._rank
+         )
+         return os.path.join(self._xdmfFolder, fileName)
+ 
+@@ -4453,7 +4453,7 @@ class XDMFHandler(HDF5Handler):
+                 for i, (elems, _, loc) in enumerate(grids):
+                     if self._shouldWrite:
+                         if self._sim._isDistributed():
+-                            gridName = f'{refCls._locStr}Grid{i}_rank{nsim.MPI.rank}'
++                            gridName = f'{refCls._locStr}Grid{i}_rank{nsim.MPI._rank}'
+                         else:
+                             gridName = f'{refCls._locStr}Grid{i}'
+                         parentGrid, xmlPath = self._getHierarchicalParent(self._hierarchicalGrids, loc)
+@@ -4480,11 +4480,11 @@ class XDMFHandler(HDF5Handler):
+                 elemStr2ElemCls = {elemCls._locStr: elemCls for elemCls in self._temporalGrids.keys()}
+                 allLocations = [((loc[0]._locStr,) + loc[1:], path) for loc, path in allLocations]
+                 fileName = XDMFHandler._FILE_NAME_PATTERN.format(
+-                    uid=self._currUID, run=self._currRun, rank=nsim.MPI.rank
++                    uid=self._currUID, run=self._currRun, rank=nsim.MPI._rank
+                 )
+                 allInfos = mpi4py.MPI.COMM_WORLD.gather((fileName, allLocations), root=0)
+ 
+-                if nsim.MPI.rank == 0:
++                if nsim.MPI._rank == 0:
+                     # Write a common xmf file on rank 0
+                     self._fullXdmf, fullhierarchicalGrids = self._createXMLDocument()
+                     for fileName, locations in allInfos:
+@@ -4512,7 +4512,7 @@ class XDMFHandler(HDF5Handler):
+         return hyperslab
+ 
+     def _newTimeStep(self, t, rs, tind):
+-        rsId = (nsim.MPI.rank, rs._selectorInd)
++        rsId = (nsim.MPI._rank, rs._selectorInd)
+         for val, loctpe, start, step, nVals, gridCls, gridInd, center in self._rs2Grids[rsId]:
+             tempGrid, xmlPath, currTime, currGrid = self._temporalGrids[gridCls][gridInd]
+             if currTime != t:
+@@ -4566,13 +4566,13 @@ class XDMFHandler(HDF5Handler):
+             ngeom.VertReference: (1, 1),
+         }
+         if self._sim._isDistributed():
+-            gridName = f'{gridCls._locStr}Grid{gridInd}_rank{nsim.MPI.rank}'
++            gridName = f'{gridCls._locStr}Grid{gridInd}_rank{nsim.MPI._rank}'
+         else:
+             gridName = f'{gridCls._locStr}Grid{gridInd}'
+         elemCode, elemColNb = tpeMap[gridCls]
+ 
+         cond = f'{gridName}/XYZ' not in meshGroup if meshGroup is not None else None
+-        if not self._sim._isDistributed():
++        if nsim.MPI._usingMPI and not self._sim._isDistributed():
+             # If the mesh is not distributed, all ranks need to be involved in the calls to get mesh data
+             import mpi4py.MPI
+             cond = mpi4py.MPI.COMM_WORLD.bcast(cond, root=0)
+diff --git a/pysteps/steps/API_2/sim.py b/pysteps/steps/API_2/sim.py
+index afe6dcf..c695381 100644
+--- a/pysteps/steps/API_2/sim.py
++++ b/pysteps/steps/API_2/sim.py
+@@ -1540,6 +1540,11 @@ class MPI:
+         cls._loadInfos()
+         return stepslib.getRank()
+ 
++    @nutils.classproperty
++    def _rank(cls):
++        """Internal method for getting the rank of the current process but without initializing MPI"""
++        return cls.rank if cls._usingMPI else 0
++
+     @nutils.classproperty
+     def nhosts(cls):
+         """Get the number of hosts
+@@ -1552,6 +1557,11 @@ class MPI:
+         cls._loadInfos()
+         return stepslib.getNHosts()
+ 
++    @nutils.classproperty
++    def _nhosts(cls):
++        """Internal method for getting the number of hosts but without initializing MPI"""
++        return cls.nhosts if cls._usingMPI else 1
++
+     @classmethod
+     def _getSolver(cls, name):
+         cls._loadInfos()
+@@ -1610,8 +1620,8 @@ class _SimulationCheckpointer:
+         newName = f'{self._prefix}_{self._sim._runId}_{time}_{self._sim._solverStr}_cp'
+         self._sim.checkpoint(newName)
+         if self._onlyLast and self._lastName is not None:
+-            if MPI.nhosts > 1:
+-                os.remove(self._lastName + f'_{MPI.rank}')
++            if MPI._nhosts > 1:
++                os.remove(self._lastName + f'_{MPI._rank}')
+             else:
+                 os.remove(self._lastName)
+         self._lastName = newName
+diff --git a/pysteps/stepsblender/blenderloader.py b/pysteps/stepsblender/blenderloader.py
+index 5a9d440..9ce4662 100644
+--- a/pysteps/stepsblender/blenderloader.py
++++ b/pysteps/stepsblender/blenderloader.py
+@@ -88,6 +88,7 @@ class HDF5BlenderLoader(objects.BlenderCollection, state.State):
+ 
+     specScaleFactor: Annotated[float, 'Size of species compared to the mean tetrahedron size'] = 0.025
+     background_color: Annotated[utils.colorType, 'Color of the background'] = (0.025, 0.025, 0.025, 1)
++    cycles_shadows: Annotated[bool, 'Make global light cast shadows with the cycles render engine'] = False
+ 
+     Meshes: groups.MeshGroup = None
+     Species: groups.SpeciesGroup = None
+@@ -163,7 +164,7 @@ class HDF5BlenderLoader(objects.BlenderCollection, state.State):
+             # Change light to sun
+             bpy.data.lights['Light'].type = 'SUN'
+             bpy.data.lights['Light'].energy = 3
+-            bpy.data.lights['Light'].cycles.cast_shadow = False
++            bpy.data.lights['Light'].cycles.cast_shadow = self.cycles_shadows
+             bpy.data.objects['Light'].rotation_euler = (0, 0, 0)
+ 
+             # Set animation start and end frames
+diff --git a/pysteps/stepsblender/load.py b/pysteps/stepsblender/load.py
+index 4b4a516..1d854a3 100644
+--- a/pysteps/stepsblender/load.py
++++ b/pysteps/stepsblender/load.py
+@@ -129,13 +129,15 @@ def addUnknownHierarchicalArgs(allParams, addedParams, params, unknown_args):
+             matchingParams = [param for pattern, param in reParams if pattern.match(fullName)]
+             if len(matchingParams) == 0:
+                 raise ValueError(f'Cannot parse argument "{name}"')
+-            allTypes = set()
++            allTypes = {}
+             for mp in matchingParams:
+                 defVal, tpe = getParamFromFullName(allParams, mp)
+-                allTypes.add(tpe)
++                allTypes[id(tpe)] = tpe
+             if len(allTypes) > 1:
+                 raise Exception(
+-                    f'Several hierarchical parameters with different types match {name}: {allTypes}.')
++                    f'Several hierarchical parameters with different types match {name}: '
++                    f'{list(allTypes.values())}.'
++                )
+ 
+         addArgumentToParser(parser, fullName, tpe)
+         flatParams.append(fullName)
+diff --git a/pysteps/stepsblender/objects.py b/pysteps/stepsblender/objects.py
+index 9da3a73..5bb948c 100644
+--- a/pysteps/stepsblender/objects.py
++++ b/pysteps/stepsblender/objects.py
+@@ -383,6 +383,9 @@ class VesicleMaterial(BlenderMaterial):
+ 
+     fresnel_IOR: Annotated[float, 'Fresnel Index Of Refraction'] = 1.05
+     fresnel_multiplier: Annotated[float, 'Strength of the outer rim'] = 2
++    facing_blend: Annotated[float, 'Gradient of the inner color'] = 0.4
++
++    shadow_method: Annotated[str, 'Blender shadow method'] = 'NONE'
+ 
+     def setUp(self, mat, fromScratch):
+         if fromScratch:
+@@ -401,17 +404,25 @@ class VesicleMaterial(BlenderMaterial):
+             bsdf.inputs['Alpha'].default_value = self.alpha
+             if self.alpha < 1:
+                 mat.blend_method = 'BLEND'
+-            mat.shadow_method = 'NONE'
++            mat.shadow_method = self.shadow_method
+ 
+             fresnel = nodes.new('ShaderNodeFresnel')
+             fresnel.inputs['IOR'].default_value = self.fresnel_IOR
+ 
++            layer_weight = nodes.new('ShaderNodeLayerWeight')
++            layer_weight.inputs['Blend'].default_value = self.facing_blend
++
+             mult = nodes.new('ShaderNodeMath')
+             mult.operation = 'MULTIPLY'
+             mult.inputs[0].default_value = self.fresnel_multiplier
+ 
++            add = nodes.new('ShaderNodeMath')
++            add.operation = 'ADD'
++
+             node_tree.links.new(mult.inputs[1], fresnel.outputs['Fac'])
+-            node_tree.links.new(bsdf.inputs['Emission Strength'], mult.outputs['Value'])
++            node_tree.links.new(add.inputs[0], mult.outputs['Value'])
++            node_tree.links.new(add.inputs[1], layer_weight.outputs['Facing'])
++            node_tree.links.new(bsdf.inputs['Emission Strength'], add.outputs['Value'])
+ 
+ 
+ class RaftMaterial(BlenderMaterial):
+@@ -545,9 +556,10 @@ class STEPSMesh(BlenderMesh):
+                 mesh.attributes.new(prop, type='FLOAT', domain='POINT')
+ 
+             # Smooth shading
+-            if self.smooth_angle is not None:
++            if self.smooth_angle is not None and bpy.app.version < (4, 1, 0):
+                 for f in mesh.polygons:
+                     f.use_smooth = True
++                # These properties were removed in Blender 4.1
+                 mesh.use_auto_smooth = True
+                 mesh.auto_smooth_angle = self.smooth_angle
+         else:
+@@ -654,7 +666,8 @@ class BlenderObject(BlenderWrapper):
+ class STEPSMeshObject(BlenderObject):
+     mesh: BlenderMesh = STEPSMesh
+     material: BlenderMaterial = MeshMaterial
+-    solidifySurface: Annotated[bool, 'Whether the mesh surface should be solidified'] = True
++    surfaceThickness: Annotated[float,
++        'The thickness of the mesh surface, should be greater than 0 if rafts are present on the surface'] = 0.01
+ 
+     def setUp(self, obj, fromScratch):
+         """Sets up the given blender object
+@@ -665,8 +678,54 @@ class STEPSMeshObject(BlenderObject):
+             :type fromScratch: bool
+         """
+         super().setUp(obj, fromScratch)
+-        if fromScratch and self.solidifySurface:
+-            obj.modifiers.new('solidify', type='SOLIDIFY')
++        if fromScratch:
++            if self.surfaceThickness > 0:
++                solid = obj.modifiers.new('solidify', type='SOLIDIFY')
++                solid.thickness = self.surfaceThickness
++            # Smooth shading
++            if bpy.app.version >= (4, 1, 0) and self.mesh.smooth_angle is not None:
++                # Since Blender 4.1, the smooth shading has to be done on the object and not the mesh.
++                # However, the new way to set it (bpy.ops.object.modifier_add_node_group) does not work
++                # in scripts in Blender 4.1 (see https://projects.blender.org/blender/blender/issues/117399).
++                # So the code below (adapted from https://blenderartists.org/t/asset-loading-is-unfinished-warning/1510459/8)
++                # creates the geometry node required for smooth shading
++                modifier = obj.modifiers.new("Smooth by Angle", "NODES")
++                node_group = bpy.data.node_groups.new("Smooth by Angle", "GeometryNodeTree")
++                node_group.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
++                input_node = node_group.nodes.new("NodeGroupInput")
++                input_node.select = False
++                node_group.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
++                output_node = node_group.nodes.new("NodeGroupOutput")
++                output_node.is_active_output = True
++                output_node.select = False
++                node_group.is_modifier = True
++                modifier.node_group = node_group
++
++                nodes = node_group.nodes
++                geom_in = nodes.get("Group Input")
++                geom_out = nodes.get("Group Output")
++                # Edge Angle node
++                node_edge_angle = nodes.new("GeometryNodeInputMeshEdgeAngle")
++                node_edge_angle.label = "Edge Angle"
++                # Compare less or equal node
++                node_less_than_or_equal = nodes.new("FunctionNodeCompare")
++                node_less_than_or_equal.operation = "LESS_EQUAL"
++                node_less_than_or_equal.inputs["B"].default_value = self.mesh.smooth_angle
++                # Shade Smooth node
++                node_set_smooth_edge = nodes.new("GeometryNodeSetShadeSmooth")
++                node_set_smooth_edge.label = "Set Shade Smooth (Edge)"
++                node_set_smooth_edge.domain = "EDGE"
++                # Shade Smooth node
++                node_set_smooth_face = nodes.new("GeometryNodeSetShadeSmooth")
++                node_set_smooth_face.label = "Set Shade Smooth (Face)"
++                node_set_smooth_face.domain = "FACE"
++                node_set_smooth_face.inputs["Shade Smooth"].default_value = True
++                # Linking all the nodes
++                node_group.links.new(node_edge_angle.outputs["Unsigned Angle"], node_less_than_or_equal.inputs["A"])
++                node_group.links.new(geom_in.outputs["Geometry"], node_set_smooth_edge.inputs["Geometry"])
++                node_group.links.new(node_less_than_or_equal.outputs["Result"], node_set_smooth_edge.inputs["Shade Smooth"])
++                node_group.links.new(node_set_smooth_edge.outputs["Geometry"], node_set_smooth_face.inputs["Geometry"])
++                node_group.links.new(node_set_smooth_face.outputs["Geometry"], geom_out.inputs["Geometry"])
+ 
+ 
+ class STEPSVesiclePath(BlenderObject):
+diff --git a/src/steps/model/fwd.hpp b/src/steps/model/fwd.hpp
+index 00e390e..8e1c1c5 100644
+--- a/src/steps/model/fwd.hpp
++++ b/src/steps/model/fwd.hpp
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include "util/common.hpp"
++
+ namespace steps::model {
+ 
+ class Chan;
+diff --git a/src/steps/mpi/dist/tetopsplit/definition/efield.hpp b/src/steps/mpi/dist/tetopsplit/definition/efield.hpp
+index 45769f6..46be33b 100644
+--- a/src/steps/mpi/dist/tetopsplit/definition/efield.hpp
++++ b/src/steps/mpi/dist/tetopsplit/definition/efield.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "util/error.hpp"
+ #include <map>
+ #include <optional>
+ #include <utility>
+@@ -78,11 +79,38 @@ struct OhmicCurrent {
+                                     const MolState& mol_state,
+                                     const DistMesh& mesh,
+                                     osh::Real sim_time) const;
+-#endif  // USE_PETSC
++
+     osh::Real getReversalPotential(mesh::triangle_id_t triangle) const;
+     void setReversalPotential(mesh::triangle_id_t triangle, osh::Real value);
+     void reset();
+     friend std::ostream& operator<<(std::ostream& os, OhmicCurrent const& m);
++#else
++    static constexpr auto PETSC_ERROR_MSG =
++        "STEPS was compiled without PETSc, methods related to membrane potential computations are "
++        "not available";
++    double getTriBConVertex(const mesh::triangle_id_t& /*b_id*/,
++                            const MolState& /*mol_state*/,
++                            double /*Avert*/,
++                            osh::Real /*sim_time*/) const {
++        ArgErrLog(PETSC_ERROR_MSG);
++    }
++    double getTriCurrentOnVertex(osh::Real /*potential_on_vertex*/,
++                                 const mesh::triangle_id_t& /*b_id*/,
++                                 const MolState& /*mol_state*/,
++                                 const DistMesh& /*mesh*/,
++                                 osh::Real /*sim_time*/) const {
++        ArgErrLog(PETSC_ERROR_MSG);
++    }
++    osh::Real getReversalPotential(mesh::triangle_id_t /*triangle*/) const {
++        ArgErrLog(PETSC_ERROR_MSG);
++    }
++    void setReversalPotential(mesh::triangle_id_t /*triangle*/, osh::Real /*value*/) {
++        ArgErrLog(PETSC_ERROR_MSG);
++    }
++    void reset() {
++        ArgErrLog(PETSC_ERROR_MSG);
++    }
++#endif  // USE_PETSC
+ 
+     const osh::Real conductance;
+     const std::optional<container::species_id> channel_state;
+diff --git a/src/steps/mpi/tetvesicle/pointspec.cpp b/src/steps/mpi/tetvesicle/pointspec.cpp
+index 758c5e2..a2b28a4 100644
+--- a/src/steps/mpi/tetvesicle/pointspec.cpp
++++ b/src/steps/mpi/tetvesicle/pointspec.cpp
+@@ -51,6 +51,7 @@ PointSpec::PointSpec(solver::spec_global_id gidx,
+ 
+ PointSpec::PointSpec(solver::spec_global_id gidx, double radius, std::fstream& cp_file)
+     : pSpec_gidx(gidx) {
++    util::restore(cp_file, pIdx);
+     util::restore(cp_file, pSpec_gidx);
+     util::restore(cp_file, pPosSpherical);
+     util::restore(cp_file, pPosCartesian);
+@@ -64,6 +65,7 @@ PointSpec::~PointSpec() = default;
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+ void PointSpec::checkpoint(std::fstream& cp_file) {
++    util::checkpoint(cp_file, pIdx);
+     util::checkpoint(cp_file, pSpec_gidx);
+     util::checkpoint(cp_file, pPosSpherical);
+     util::checkpoint(cp_file, pPosCartesian);
+diff --git a/test/unit/py/API_2/model_test/test_leakage.py b/test/unit/py/API_2/model_test/distributed_leakage.py
+similarity index 98%
+rename from test/unit/py/API_2/model_test/test_leakage.py
+rename to test/unit/py/API_2/model_test/distributed_leakage.py
+index 4a914dc..f333815 100644
+--- a/test/unit/py/API_2/model_test/test_leakage.py
++++ b/test/unit/py/API_2/model_test/distributed_leakage.py
+@@ -157,7 +157,7 @@ class Leakage(unittest.TestCase):
+                 cls.Vzmin4 = Vrs.data[0, :, 0] 
+                 cls.Vzmax4 = Vrs.data[0, :, 1]
+ 
+-    def testMagnitude(self):
++    def testMagnitude_n1(self):
+         """Test getter and setter of membrane resistance in STEPS4"""
+         res = 0.4
+         rev_pot = 0.4
+@@ -165,11 +165,11 @@ class Leakage(unittest.TestCase):
+         self.assertEqual( (res, rev_pot), self.sim.solver.getMembRes("membrane"), 
+                         "Error in set or get method")
+ 
+-    def testSolution_not_constant(self):
++    def testSolution_not_constant_n1(self):
+         self.assertTrue( np.any( np.abs(self.Vzmax3-self.Vzmax3[0]) > 1e-15  ), 
+                         "The solution is constant")
+ 
+-    def testMse_3vs4(self):
++    def testMse_3vs4_n1(self):
+         """"MSE between the values obtained from steps 3 and steps 4"""
+         threshold = 1e-12
+         MSE_max = np.mean( (self.Vzmax3 - self.Vzmax4)**2 )
+@@ -179,7 +179,7 @@ class Leakage(unittest.TestCase):
+         self.assertNotEqual(MSE_min, 0.0, "MSE equal zero")
+         self.assertNotEqual(MSE_max, 0.0, "MSE equal zero")
+ 
+-    def testMse_analytical(self):
++    def testMse_analytical_n1(self):
+         """"MSE between the values obtained from steps 3 steps 4 and the analytical solution"""
+         threshold = 1e-2
+ 
+diff --git a/test/unit/py/API_2/sim_test/base_model.py b/test/unit/py/API_2/sim_test/base_model.py
+index 951d66b..0a6dc14 100644
+--- a/test/unit/py/API_2/sim_test/base_model.py
++++ b/test/unit/py/API_2/sim_test/base_model.py
+@@ -312,7 +312,7 @@ class TestModelFramework(unittest.TestCase):
+                 # TODO Remove condition once vesicle changes are merged
+                 pathCnt = path.Count
+                 pathCnc = path.Conc
+-                if MPI.rank == 0 or not self.useDist:
++                if MPI._rank == 0 or not self.useDist:
+                     self.assertEqual(pathCnt, cnt)
+                     self.assertAlmostEqualWThresh(pathCnc, cnt / Avogad / (1e3 * vol), self.tolerance)
+                 if not self.useDist:
+@@ -343,7 +343,7 @@ class TestModelFramework(unittest.TestCase):
+             with self.subTest(path=path, cnt=cnt, vol=vol):
+                 pathCnt = path.Count
+                 pathCnc = path.Conc
+-                if MPI.rank == 0 or not self.useDist:
++                if MPI._rank == 0 or not self.useDist:
+                     self.assertEqual(pathCnt, cnt)
+                     self.assertAlmostEqualWThresh(pathCnc, cnt / Avogad / (1e3 * vol), self.tolerance)
+                 if not self.useDist:
+diff --git a/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_data_saving.py b/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_data_saving.py
+index 564371d..691e144 100644
+--- a/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_data_saving.py
++++ b/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_data_saving.py
+@@ -53,6 +53,10 @@ class DistTetOpSplitSimDataSaving(bm.DistTetTestModelFramework, tds.TetSimDataSa
+     def _get_API1_Sim(self, omdl, ogeom):
+         return None
+ 
++    @unittest.skip('Not needed here')
++    def testXDMFWithoutMPI(self):
++        pass
++
+ 
+ def suite():
+     all_tests = []
+diff --git a/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_tetopsplit_dist_box.py b/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_tetopsplit_dist_box.py
+index c8484a1..6939259 100644
+--- a/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_tetopsplit_dist_box.py
++++ b/test/unit/py/API_2/sim_test/parallel_sim_test/distributed_tetopsplit_dist_box.py
+@@ -119,14 +119,12 @@ class DistTetopsplitBox(unittest.TestCase):
+         self.sim.comp1.SJ.Count = N0J * MOLECULE_RATIO
+ 
+     def testTetopsplitDistBox(self):
+-        """Test after ENDTIME that the counts match with the results of a previous run taken as reference"""
++        """Test after ENDTIME that the counts match statistically to expected counts within a 3x standard deviation bound"""
+         ENDTIME = 0.5
+-        atol = 10  # we accept results +- 10 or with only 1% relative error
+-        rtol = 0.01
+-        if platform.system() == "Darwin":
+-            expected_counts = [34.0, 1034.0, 673.0, 707.0, 8293.0, 281.0, 1281.0, 6322.0, 1603.0, 17397.0]
+-        else:
+-            expected_counts = [42.0, 1042.0, 669.0, 711.0, 8289.0, 302.0, 1302.0, 6369.0, 1671.0, 17329.0]
++
++        expected_counts = [39.72575, 1039.72575, 685.62325, 725.349, 8274.651, 295.654, 1295.654, 6354.534, 1650.188, 17349.812]
++        expected_counts_std = [6.08075135, 6.08075135, 18.81690223, 18.73510606, 18.73510606, 15.25862982, 15.25862982, 37.03727641, 35.26414831, 35.26414831]
++        std_bound = 3
+ 
+         self.sim.newRun()
+ 
+@@ -134,11 +132,13 @@ class DistTetopsplitBox(unittest.TestCase):
+         self.sim.run(ENDTIME)
+ 
+         counts = self.sim.comp1.ALL(Species).Count
++
+         if MPI.rank == 0:
+             print(f"\nFinal counts:    {counts}")
+-            print(f"Expected counts: {expected_counts}")
+-            self.assertTrue(numpy.allclose(counts, expected_counts, rtol=rtol, atol=atol))
+-
++            print(f"Mean expected counts: {expected_counts}")
++            print(f"STD expected counts: {expected_counts_std}")
++            for j in range (10):
++                self.assertTrue(numpy.isclose(counts[j], expected_counts[j], rtol=1e-8, atol=std_bound*expected_counts_std[j]))
+ 
+ def suite():
+     all_tests = []
+diff --git a/test/unit/py/API_2/sim_test/parallel_sim_test/parallel_data_saving.py b/test/unit/py/API_2/sim_test/parallel_sim_test/parallel_data_saving.py
+index 5894e33..759dc66 100644
+--- a/test/unit/py/API_2/sim_test/parallel_sim_test/parallel_data_saving.py
++++ b/test/unit/py/API_2/sim_test/parallel_sim_test/parallel_data_saving.py
+@@ -63,6 +63,10 @@ class TetOpSplitSimDataSaving(tds.TetSimDataSaving):
+         osim.setEfieldDT(self.efielddt)
+         return osim
+ 
++    @unittest.skip('Not needed here')
++    def testXDMFWithoutMPI(self):
++        pass
++
+ 
+ class VesRaftRDEFSimDataSaving(base_model.VesTestModelFramework, tds.TetSimDataSaving):
+     """Test data access, setting, and saving with vesicle and raft simulations."""
+@@ -630,7 +634,11 @@ class VesRaftRDEFSimDataSaving(base_model.VesTestModelFramework, tds.TetSimDataS
+             (newSave, newGetData, newRun, explbls),
+             [self.countRefVal]*2
+         )
+-    
++
++    @unittest.skip('Not needed here')
++    def testXDMFWithoutMPI(self):
++        pass
++
+ 
+ def suite():
+     all_tests = []
+diff --git a/test/unit/py/API_2/sim_test/test_checkpoints.py b/test/unit/py/API_2/sim_test/test_checkpoints.py
+index a8602e3..df0ea6c 100644
+--- a/test/unit/py/API_2/sim_test/test_checkpoints.py
++++ b/test/unit/py/API_2/sim_test/test_checkpoints.py
+@@ -43,7 +43,7 @@ from . import base_model
+ def getUniqueTempPrefix(*args, **kwargs):
+     _, pathPrefix = tempfile.mkstemp(*args, **kwargs)
+     os.remove(pathPrefix)
+-    if MPI.nhosts > 1:
++    if MPI._nhosts > 1:
+         # Need to synchronize across ranks
+         pathPrefix = mpi4py.MPI.COMM_WORLD.bcast(pathPrefix, root=0)
+     return pathPrefix
+@@ -108,12 +108,12 @@ class WmCheckpoints(base_model.TestModelFramework):
+         for name in os.listdir(tmpDir):
+             if name.startswith(prefix):
+                 fullPath = os.path.join(tmpDir, name)
+-                if MPI.nhosts > 1:
++                if MPI._nhosts > 1:
+                     *_, rank = name.split('_')
+                     rank = int(rank)
+-                    self.assertLess(rank, MPI.nhosts)
++                    self.assertLess(rank, MPI._nhosts)
+                     self.assertGreaterEqual(rank, 0)
+-                    if rank != MPI.rank:
++                    if rank != MPI._rank:
+                         continue
+                     noRankPath = os.path.join(tmpDir, name[:-len(f'_{rank}')])
+                 else:
+@@ -130,12 +130,12 @@ class WmCheckpoints(base_model.TestModelFramework):
+                 run, time, solver, *cp = name[(len(prefix)+1):].split('_')
+                 run = int(run)
+                 time = float(time)
+-                if MPI.nhosts > 1:
++                if MPI._nhosts > 1:
+                     cp, rank = cp
+                     rank = int(rank)
+-                    self.assertLess(rank, MPI.nhosts)
++                    self.assertLess(rank, MPI._nhosts)
+                     self.assertGreaterEqual(rank, 0)
+-                    if rank != MPI.rank:
++                    if rank != MPI._rank:
+                         continue
+                     noRankPath = os.path.join(tmpDir, name[:-len(f'_{rank}')])
+                 else:
+diff --git a/test/unit/py/API_2/sim_test/test_dataSaving.py b/test/unit/py/API_2/sim_test/test_dataSaving.py
+index 1b06334..8569466 100644
+--- a/test/unit/py/API_2/sim_test/test_dataSaving.py
++++ b/test/unit/py/API_2/sim_test/test_dataSaving.py
+@@ -1399,6 +1399,29 @@ class TetSimDataSaving(base_model.TetTestModelFramework, SimDataSaving):
+     def testXDMFWithoutMesh(self):
+         pass
+ 
++    @unittest.skipIf(importlib.util.find_spec('h5py') is None, 'h5py not available')
++    def testXDMFWithoutMPI(self, dbUID='GroupID'):
++        """Check that XDMFHandler does not trigger any MPI initialization or any mpi4py import"""
++
++        _, dbPath = tempfile.mkstemp(prefix=f'{self.__class__.__name__}testXDMFWithoutMPISaving', suffix='')
++        self.createdFiles.add(dbPath)
++
++        # Setup traps
++        steps.stepslib.mpiInit = lambda: self.assertTrue(False)
++        sys.modules['mpi4py.MPI'] = None
++
++        rs = ResultSelector(self.newSim)
++        saver = rs.TETS().LIST('S1', 'S2').Count
++        self.newSim.toSave(saver, dt=self.deltaT)
++
++        with XDMFHandler(dbPath) as dbh:
++            self.newSim.toDB(dbh, dbUID, val1=1, val2=2)
++            self.createdFiles |= set(dbh._getFilePaths())
++            self.newSim.newRun()
++            self.init_API2_sim(self.newSim)
++            self.newSim.ALL(Compartment).LIST('S1', 'S2').Count = 100
++            self.newSim.run(self.shortEndTime)
++
+ 
+ def suite():
+     all_tests = []

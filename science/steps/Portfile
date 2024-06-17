@@ -23,18 +23,34 @@ homepage            https://steps.sourceforge.net/STEPS/
 checksums           rmd160  60f52c25f4478cc1b94974316e29a4c8fd05f7e9 \
                     sha256  7983572c498cd5ea63487757b3da187c6f89464ee27d388afd1339b104f92676 \
                     size    41193395
+patch_sites         none
+patchfiles          Port-Corrections.patch
+patch.pre_args      -p1
 
+pre-patch {
+    if { ![file isdirectory ${patch.dir}] } {
+        file mkdir ${patch.dir}
+        error "No patch file in ${patch.dir}"
+    }
+}
 
 depends_build-append port:cmake
 depends_lib-append port:OpenBLAS port:gsl port:eigen3 port:metis port:sundials6 port:omega_h
 
 
+
 configure.args-append -DSTEPS_USE_STEPSBLENDER=False \
                       -DCMAKE_C_COMPILER=${prefix}/bin/mpicc \
                       -DCMAKE_CXX_COMPILER=${prefix}/bin/mpicxx \
-                      -DSTEPS_INSTALL_PYTHON_DEPS=False 
+                      -DSTEPS_INSTALL_PYTHON_DEPS=False \
+                      -DUSE_BUNDLE_OMEGA_H=False \
+                      -DUSE_BUNDLE_SUNDIALS=False \
+                      -DSUNDIALS_INSTALL_DIR=${prefix}/libexec/sundials6 \
+    -DCMAKE_PREFIX_PATH:PATH=${prefix}/libexec
+
 
 variant python39 conflicts python310 description {setup python 39 module} {
+    global python_version python_prefix python_bin 
     set python_branch 3.9
     set python_version          [string map {. ""} $python_branch]
     set python_bin ${prefix}/bin/python${python_branch}
@@ -48,14 +64,16 @@ variant python39 conflicts python310 description {setup python 39 module} {
 
     
     depends_lib-append     port:py${python_version}-numpy \
-        port:py${python_version}-cython \
+        port:py${python_version}-cython 
         
     configure.args-append -DPython_EXECUTABLE:FILEPATH=${python_bin} \
-        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd}
+        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd} \
+        -DPython_INSTALL_PREFIX:PATH=${python_pkgd}
 }
 variant python310 conflicts python39 description {setup python 310 module} {
+    global python_version python_prefix python_bin 
     set python_branch 3.10
-    set python_version          [string map {. ""} $python_branch]
+    set python_version [string map {. ""} $python_branch]
     set python_bin ${prefix}/bin/python${python_branch}
     set python_prefix  ${frameworks_dir}/Python.framework/Versions/${python_branch}
     set python_pkgd ${python_prefix}/lib/python${python_branch}/site-packages
@@ -70,15 +88,18 @@ variant python310 conflicts python39 description {setup python 310 module} {
         port:py${python_version}-cython \
         
     configure.args-append -DPython_EXECUTABLE:FILEPATH=${python_bin} \
-        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd}
+        -DCMAKE_INSTALL_PREFIX:PATH=${python_pkgd} \
+        -DPython_INSTALL_PREFIX:PATH=${python_pkgd}
 }
+
+
 
 variant blender description {STEPS blender package} {
     configure.args-replace -DSTEPS_USE_STEPSBLENDER=False -DSTEPS_USE_STEPSBLENDER=True
 }
 universal_variant no
 
-default_variants +blender +python39
+default_variants +blender +python310
 
 post-extract {
     system -W ${worksrcpath} "git submodule update --init --recursive"
@@ -92,4 +113,24 @@ test.run             yes
 test.target          check
 
 destroot.target install
+
+post-destroot {
+    global python_version python_prefix python_bin destroot workpath
+    if {${python_version} >= 37} {
+        set args installer
+        if {${python_version} < 37} {
+            set args "install --verbose"
+        }
+        set destroot_cmd "${python_bin} -m ${args}" 
+        set destroot_destdir "--destdir ${destroot}"
+        set destroot_target [glob -nocomplain -directory ${workpath}/build *.whl]
+    } else {
+        set destroot_cmd "${python_bin} setup.py --no-user-cfg"
+        set destroot_destdir "--prefix=${python_prefix} --root=${destroot}"
+        set destroot_target install
+    }
+
+    system -W ${worksrcpath} "${destroot_cmd} ${destroot_destdir} ${destroot_target}"
+}
+
 

@@ -18,6 +18,24 @@ checksums           rmd160  1e14aa30a6994af10cebee1560f12943c190f2ca \
                     sha256  ec170cfcfab71e924729b65f57573b20fd997bea62e4df82bc69d863701b413b \
                     size    1679806
 
+# Define all of our base paths up-front
+set port_install_prefix \
+                    ${prefix}/libexec/${name}
+set port_install_cmake \
+                    ${port_install_prefix}/cmake
+set port_install_include \
+                    ${port_install_prefix}/include
+set port_install_lib \
+                    ${port_install_prefix}/lib
+
+# Populate CMake options currently available
+cmake.install_prefix \
+                    ${port_install_prefix}
+cmake_share_module_dir \
+                    ${port_install_cmake}
+cmake.install_rpath \
+                    ${port_install_lib}
+
 configure.args-append  -DOmega_h_USE_MPI:BOOL=ON \
                        -DCMAKE_CXX_COMPILER:FILEPATH=${prefix}/bin/mpicxx \
                        -DOmega_h_USE_Gmsh_DEFAULT:BOOL=ON \
