@@ -115,6 +115,10 @@ test.target          check
 destroot.target install
 
 post-destroot {
+    # After destroot command make install
+    # (which builds python wheel)
+    # install via python -m installer through Portfile
+    # pip install via CMake is not allowed permission wise
     global python_version python_prefix python_bin destroot workpath
     if {${python_version} >= 37} {
         set args installer
@@ -132,5 +136,3 @@ post-destroot {
 
     system -W ${worksrcpath} "${destroot_cmd} ${destroot_destdir} ${destroot_target}"
 }
-
-
