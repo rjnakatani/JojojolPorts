@@ -9,6 +9,9 @@ Local Portfile Repository for Jojojol based on [Funalab Ports](https://github.co
 * python/py-fake-useragent ... Portfile for [py-fake-user-agent](https://github.com/fake-useragent/fake-useragent) v0.1.11
 * python/py-pynverse ... Portfile for [pynverse](https://github.com/alvarosg/pynverse) v0.1.1.4
 * editors/neuron-mode.el ... Portfile for [neuron-emacs](https://github.com/davidcsterratt/neuron-emacs)
+* science/omega_h ... Portfile for [omega\_h](https://github.com/sandialabs/omega_h) v9.34.13
+* science/steps ... Portfile for [STEPS](https://steps.sourceforge.net/STEPS/default.php) 5.0.1
+* science/libsbml_dev ... Portfile for development branch [libsbml](https://github.com/sbmlteam/libsbml) v5.20.4
 
 
 
