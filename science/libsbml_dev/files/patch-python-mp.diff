@@ -1,0 +1,14 @@
+--- src/bindings/python/CMakeLists.txt
++++ src/bindings/python/CMakeLists.txt
+@@ -331,6 +331,11 @@
+ else()
+     set(PYTHON_PACKAGE_INSTALL_DIR ${MISC_PREFIX}bindings/python)
+ endif()
++if (APPLE)
++    execute_process(COMMAND "${PYTHON_EXECUTABLE}" -c "import sys; from distutils.sysconfig import get_python_lib; sys.stdout.write(get_python_lib())"
++    OUTPUT_VARIABLE PYTHON_PACKAGE_INSTALL_DIR)
++endif(APPLE)
++MESSAGE( STATUS "PYTHON_PACKAGE_INSTALL_DIR: " ${PYTHON_PACKAGE_INSTALL_DIR} )
+ 
+ ####################################################################
+ #
