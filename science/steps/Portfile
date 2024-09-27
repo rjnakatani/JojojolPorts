@@ -3,7 +3,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cmake 1.1
 
-github.setup        CNS-OIST STEPS 5.0.1
+github.setup        CNS-OIST STEPS 5.0.2
 fetch.type          git
 worksrcdir          ${github.project}-${github.version}
 git.url             https://github.com/${github.author}/${github.project}.git
@@ -23,16 +23,15 @@ homepage            https://steps.sourceforge.net/STEPS/
 checksums           rmd160  60f52c25f4478cc1b94974316e29a4c8fd05f7e9 \
                     sha256  7983572c498cd5ea63487757b3da187c6f89464ee27d388afd1339b104f92676 \
                     size    41193395
-patch_sites         none
-patchfiles          Port-Corrections.patch
-patch.pre_args      -p1
+# patchfiles          Port-Corrections.patch
+# patch.pre_args      -p1
 
-pre-patch {
-    if { ![file isdirectory ${patch.dir}] } {
-        file mkdir ${patch.dir}
-        error "No patch file in ${patch.dir}"
-    }
-}
+# pre-patch {
+#     if { ![file isdirectory ${patch.dir}] } {
+#         file mkdir ${patch.dir}
+#         error "No patch file in ${patch.dir}"
+#     }
+# }
 
 depends_build-append port:cmake
 depends_lib-append port:OpenBLAS port:gsl port:eigen3 port:metis port:sundials6 port:omega_h
