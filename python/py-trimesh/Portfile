@@ -1,0 +1,29 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        mikedh trimesh 4.6.1
+distname            ${github.version}
+
+name                py-trimesh
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         This package contains colormaps for commonly-used oceanographic variables.
+long_description    This package contains colormaps for commonly-used oceanographic variables. Most of the colormaps started from matplotlib colormaps, but have now been adjusted using the viscm tool to be perceptually uniform.
+homepage            https://github.com/matplotlib/cmocean
+
+checksums           rmd160  a361d10aee5bc0134b033a1b670d446e3ebd0c0f \
+                    sha256  4b32ed15f08e289054fcb4b01793bab912df8ba64e7f8d21f1d7242f4e8321fe \
+                    size    13622129
+
+python.versions     37 38 39 310
+
+if {${name} ne ${subport}} {
+    depends_lib-append  port:py${python.version}-setuptools \
+                        port:py${python.version}-wheel \
+        
+    livecheck.type      none
+
+}

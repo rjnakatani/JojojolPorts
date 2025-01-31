@@ -1,0 +1,33 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        banesullivan scooby v0.10.0
+fetch.type          git
+
+distname            ${github.version}
+
+name                py-scooby
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         This is a lightweight tool for easily reporting your Python environment's package versions and hardware resources.
+long_description    This is a lightweight tool for easily reporting your Python environment's package versions and hardware resources.
+homepage            https://github.com/banesullivan/scooby
+
+checksums           rmd160  4808312d6c9e975b0eb5bceec523a65ed018c4d9 \
+                    sha256  a5edea094af64b5094f72887d2495c7314d4fe03cb2be0ad29b81d37fa3675ef \
+                    size    185903
+
+python.versions     39 310
+
+post-fetch {
+    system -W ${worksrcpath} "git submodule update --init"
+}
+if {${name} ne ${subport}} {
+    depends_lib-append  port:py${python.version}-psutil \
+        
+    livecheck.type      none
+
+}

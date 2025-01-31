@@ -1,0 +1,47 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+PortSystem          1.0
+PortGroup           github 1.0
+PortGroup           python 1.0
+
+github.setup        pyvista pyvista v0.44.2
+distname            ${github.version}
+
+name                py-pyvista
+license             MIT
+platforms           darwin
+maintainers         {@jojojol gmail.com:rjnakatani} openmaintainer
+description         3D plotting and mesh analysis through a streamlined interface for the Visualization Toolkit 
+long_description    PyVista is a helper module for the Visualization Toolkit (VTK) that wraps the VTK library through NumPy and direct array access through a variety of methods and classes. This package provides a Pythonic, well-documented interface exposing VTK's powerful visualization backend to facilitate rapid prototyping, analysis, and visual integration of spatially referenced datasets.
+homepage            https://github.com/pyvista/pyvista
+
+checksums           rmd160  f63f265611764a93398d17027073822a96a338e3 \
+                    sha256  f217412d52c20ac64039d564a8171441ecb5aa51103913a33462f5078820e27c \
+                    size    139135704
+
+python.versions     39 310
+
+if {${name} ne ${subport}} {
+    depends_lib-append  port:py${python.version}-meshio \
+                        port:py${python.version}-jupyterlab \
+                        port:py${python.version}-pooch \
+                        port:py${python.version}-imageio \
+                        port:py${python.version}-codecov \
+                        port:py${python.version}-hypothesis \
+                        port:py${python.version}-rtree \
+                        port:py${python.version}-cliff \
+                        port:py${python.version}-colorcet \
+                        port:py${python.version}-pytest \
+                        port:py${python.version}-scooby \
+                        port:py${python.version}-meshio \
+                        port:py${python.version}-numpy \
+                        port:py${python.version}-scipy \
+                        port:py${python.version}-packaging \
+                        port:py${python.version}-matplotlib \
+                        port:py${python.version}-tqdm \
+                        port:vtk\
+        
+                        
+    
+    livecheck.type      none
+
+}
