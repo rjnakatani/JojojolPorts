@@ -38,10 +38,12 @@ if {${name} ne ${subport}} {
                         port:py${python.version}-packaging \
                         port:py${python.version}-matplotlib \
                         port:py${python.version}-tqdm \
-                        port:vtk\
         
                         
     
     livecheck.type      none
 
+}
+post-activate {
+    system "echo \"This port requires the vtk python variant which cannot be automatically called as a dependency; Install the relevant vtk variant"
 }
