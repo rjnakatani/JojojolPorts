@@ -38,6 +38,7 @@
 
 # cmake
 build
+work/
 
 # IntelliJ
 .idea/
