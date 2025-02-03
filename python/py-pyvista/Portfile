@@ -45,5 +45,5 @@ if {${name} ne ${subport}} {
 
 }
 post-activate {
-    system "echo \"This port requires the vtk python variant which cannot be automatically called as a dependency; Install the relevant vtk variant"
+    system "echo \"This port requires the vtk python variant which cannot be automatically called as a dependency; Install the relevant vtk variant\""
 }
