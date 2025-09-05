@@ -3,8 +3,10 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           python 1.0
 
-github.setup        pyvista pyvista v0.44.2
+github.setup        pyvista pyvista v0.46.3
+github.tarball_from archive
 distname            ${github.version}
+
 
 name                py-pyvista
 license             MIT
@@ -14,9 +16,9 @@ description         3D plotting and mesh analysis through a streamlined interfac
 long_description    PyVista is a helper module for the Visualization Toolkit (VTK) that wraps the VTK library through NumPy and direct array access through a variety of methods and classes. This package provides a Pythonic, well-documented interface exposing VTK's powerful visualization backend to facilitate rapid prototyping, analysis, and visual integration of spatially referenced datasets.
 homepage            https://github.com/pyvista/pyvista
 
-checksums           rmd160  f63f265611764a93398d17027073822a96a338e3 \
-                    sha256  f217412d52c20ac64039d564a8171441ecb5aa51103913a33462f5078820e27c \
-                    size    139135704
+checksums           rmd160  63dc29b5c3593ebef7902a3c073281c61c96f5c9 \
+                    sha256  cfcef57f4532a26bc89b6bba9befe620854935e16c5961bf039172e650f716b2 \
+                    size    150239908
 
 python.versions     39 310
 
