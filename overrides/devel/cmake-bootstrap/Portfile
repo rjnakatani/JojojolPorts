@@ -1,0 +1,143 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           clang_dependency 1.0
+
+# Local override of the official devel/cmake-bootstrap port (same name,
+# deliberately shadowing it). MacPorts has no dependency-substitution
+# mechanism, so any port that declares `depends_*:port:cmake-bootstrap`
+# (e.g. clang-11-bootstrap, pulled in transitively when building
+# neovim/tmux's toolchain) can only be satisfied by a port literally
+# named cmake-bootstrap - hence this override rather than a
+# differently-named sibling port.
+#
+# This tree is intentionally kept separate from the rest of
+# JojojolPorts and given its own, higher-priority sources.conf entry,
+# so this one override doesn't affect resolution of any other
+# same-named ports living in the main JojojolPorts tree.
+#
+# See devel/cmake-bootstrap-nocurses (main JojojolPorts tree) for the
+# full rationale and standalone, non-conflicting-named version of this
+# same fix:
+#
+# On modern macOS SDKs (observed on macOS 26 "Tahoe"), building
+# cmake-bootstrap's ccmake fails at the link step:
+#
+#   ld: symbol(s) not found for architecture x86_64
+#     "_keypad$NCURSES60", "_printw$NCURSES60", "_wrefresh$NCURSES60", ...
+#
+# cmake-bootstrap's own ./bootstrap script deliberately builds outside
+# of MacPorts (CPATH/LIBRARY_PATH are cleared below), so it falls back
+# to the SDK's legacy curses shim at /usr/X11R6/lib/libncurses.dylib.
+# That shim's headers still declare the old ABI-versioned symbol names,
+# but recent SDKs no longer export them from the dylib, so linking
+# ccmake fails. This is the same class of problem already fixed for
+# Tiger (os.major <= 9) in the upstream Portfile via
+# patch-cmake-bootstrap-disable-curses-gui.diff (see
+# https://trac.macports.org/ticket/69990), just triggered by a
+# different macOS/SDK generation. cmake/ctest/cpack do not need
+# curses - only the optional ccmake TUI does - so this port applies
+# that same patch unconditionally on Darwin instead of only on very
+# old releases.
+
+name                cmake-bootstrap
+categories          devel
+license             BSD
+installs_libs       no
+maintainers         nomaintainer
+dist_subdir         cmake
+
+set branch          3.9
+version             ${branch}.6
+distname            cmake-${version}
+
+checksums           rmd160  858257d95fde810195e4cf7254072dd8db608cc4 \
+                    sha256  7410851a783a41b521214ad987bb534a7e4a65e059651a2514e6ebfc8f46b218 \
+                    size    7705400
+
+homepage            https://cmake.org
+master_sites        ${homepage}/files/v${branch}/
+
+description         Cross-platform make pegged at version ${version}, built without the ccmake curses GUI.
+long_description    ${description} This was the last version of cmake to not require c++11. \
+                    This is a local override of the official cmake-bootstrap port with the \
+                    curses-based ccmake GUI disabled unconditionally on Darwin, working around \
+                    a linker failure against Apple's SDK curses shim on modern macOS.
+
+# save original prefix
+set orig_prefix    ${prefix}
+prefix             ${prefix}/libexec/${name}
+
+patchfiles-append \
+    patch-Modules-FindQt4.cmake.release.diff \
+    patch-Modules-FindFreetype.cmake.release.diff \
+    patch-Modules-noArchCheck.release.diff \
+    patch-CMakeFindFrameworks.cmake.release.diff \
+    patch-Source_CMakeVersionCompute.cmake.release.diff \
+    patch-Source-cmFindLibraryCommand.cxx.diff \
+    patch-Source-kwsys-kwsysPlatformTestsCXX.cxx.diff
+
+if {${os.platform} eq "darwin"} {
+    # curses/ncurses linkage against the SDK is unreliable across Darwin
+    # releases (see the fork rationale above); ccmake is not needed for
+    # cmake-bootstrap to function, so disable it unconditionally here.
+    patchfiles-append patch-cmake-bootstrap-disable-curses-gui.diff
+}
+
+post-patch {
+    # installed cmake will search first in the main macports prefix for frameworks
+    reinplace "s|__ORIG_PREFIX__|${orig_prefix}|g" ${worksrcpath}/Modules/CMakeFindFrameworks.cmake
+}
+
+# this port does not need to be universal, being a build tool without libraries
+# and trying to build it universal can cause errors
+# https://trac.macports.org/ticket/66213
+# https://trac.macports.org/ticket/67072
+universal_variant   no
+
+configure.cxx_stdlib
+
+platform darwin {
+    configure.env-append   CMAKE_OSX_DEPLOYMENT_TARGET=${macosx_deployment_target}
+
+    if {${configure.sdkroot} eq ""} {
+        configure.env-append SDKROOT=/
+    }
+
+    if {${os.arch} eq "i386" && ${os.major} <= 9} {
+        # The old system headers do some bit shifting on Intel about which newer compilers throw errors:
+        # SecKeychain.h:102:46: error: shift expression '(1853123693 << 8)' overflows [-fpermissive]
+        configure.cflags-append -fpermissive
+        configure.cxxflags-append -fpermissive
+    }
+}
+
+# Clear CPATH and LIBRARY_PATH as we want to be completely independent of other ports
+compiler.cpath
+compiler.library_path
+
+configure.args-append --docdir=share/doc/cmake \
+                      --parallel=${build.jobs} \
+                      --no-system-libs \
+                      --no-server
+
+configure.universal_args
+configure.post_args
+
+# CMake's configure script doesn't recognize `--host`.
+array set merger_host {i386 {} x86_64 {} ppc {} ppc64 {} arm64 {}}
+
+# Leopard's Rosetta has some difficulties configuring the ppc slice
+platform darwin 9 {
+    global universal_archs_supported
+    if {${build_arch} eq "i386" || ${build_arch} eq "x86_64"} {
+        supported_archs i386 x86_64
+    } elseif {${build_arch} eq "ppc" || ${build_arch} eq "ppc64"} {
+        supported_archs ppc ppc64
+    }
+    set universal_archs_supported ${supported_archs}
+}
+
+build.post_args VERBOSE=ON
+
+livecheck.type  none
